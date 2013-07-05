@@ -1,0 +1,63 @@
+#!/bin/bash
+# vim: set ts=2 sw=2 sts=2 et si ai: 
+
+# Copyright (c) 2012, Andres Aquino <andres.aquino(at)gmail.com>
+# This file is licensed under the BSD License version 3 or later. 
+# See the LICENSE file.
+
+# system's setup
+. ${HOME}/unix.profile
+
+# app setup
+# ln -sf ~/mydbbackup.git/dbbackup.conf ~/.dbbackuprc
+. ${HOME}/.dbbackuprc
+
+# set timestamp
+log_message "Get current timestamp"
+get_current_time
+
+# move to dbbackup path
+cd ${DB_PATH}
+mkdir -p ${U_DATE}
+log_message "Working with ${DB_PATH}/${U_DATE} directory"
+
+# read all databases
+mysql -u ${DB_USER} -h localhost -Bse 'show databases' > dbbackup.all
+log_message "Getting directory of all databases"
+
+# for each instance, create a backup file
+for EACHINSTANCE in $(cat dbbackup.all)
+do
+  mysqldump --user ${DB_USER} --single-transaction ${EACHINSTANCE} > ${U_DATE}/${EACHINSTANCE}.sql
+  log_message "Backup of ${EACHINSTANCE} ready!"
+done
+
+# compress all information
+tar -cvjf dipak-${U_DATE}.tar.bz2 ${U_DATE}
+log_message "Compression of dipak-${U_DATE}.tar.bz2 was done"
+
+# ready? - please confirm information
+dirsize=$(du -sm ${U_DATE} | sed -e "s/\t.*//g")
+filesize=$(du -sm dipak-${U_DATE}.tar.bz2 | sed -e "s/\t.*//g")
+ratiosize=$(($filesize*100/$dirsize))
+log_message "Compression of ${U_DATE}(${dirsize}M) to dipak-${U_DATE}.tar.bz2(${filesize}M) was ${ratiosize}% of original"
+
+# preserve last DIRC_POLICY entries (dirs)
+log_message "According with our backup policy, preserve last ${DIRC_POLICY} directories"
+for EACHBACKUP in $(find . -type d -name '201?????' -mtime +${DIRC_POLICY})
+do
+  rm -fr ${EACHBACKUP}
+  log_message "delete dir ${EACHBACKUP}"
+done
+
+# preserve last FILE_POLICY entries (files)
+log_message "According with our backup policy, preserve last ${FILE_POLICY} backup files"
+for EACHBACKUP in $(find . -type f -name 'dipak-*.tar.bz2' -mtime +${FILE_POLICY})
+do
+  rm -f ${EACHBACKUP}
+  log_message "delete file ${EACHBACKUP}"
+done
+
+
+# delete aux files
+rm dbbackup.all
